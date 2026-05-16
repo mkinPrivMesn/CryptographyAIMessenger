@@ -4,6 +4,9 @@ import (
 	"log"
 	"os"
 
+	"github.com/MkinPrivMesn/CryptographyAIMessenger/internal/auth"
+	"github.com/MkinPrivMesn/CryptographyAIMessenger/pkg/database"
+
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
@@ -14,13 +17,27 @@ func main() {
 		log.Fatal("Error loading .env file")
 	}
 
+	// получение порта из .env
 	port := os.Getenv("PORT")
 
+	// создание сервера в переменной r с дефолтными настройками
 	r := gin.Default()
 
-	r.POST("/register", func(c *gin.Context) {
-		c.JSON(200, gin.H{"message": "register works"})
-	})
+	// postgresql
+	pool, err := database.NewPool()
+	if err != nil {
+		log.Fatal("Error connecting to database:", err)
+	}
+	defer pool.Close()
 
+	// заношу сюда хендлер, сервис, репозиторий и модель из пакета auth
+	authRepo := auth.NewRepository(pool)
+	authService := auth.NewService(authRepo)
+	authHandler := auth.NewHandler(authService)
+
+	// вся логика приема и обработки запросов находится тут
+	r.POST("/register", authHandler.Register)
+
+	// запуск сервера на порте из .env
 	r.Run(":" + port)
 }
