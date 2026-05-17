@@ -37,6 +37,8 @@ func main() {
 
 	// вся логика приема и обработки запросов находится тут
 	r.POST("/register", authHandler.Register)
+	r.POST("/login/salt", authHandler.LoginSalt)
+	r.POST("/login", authHandler.Login)
 
 	// запуск сервера на порте из .env
 	r.Run(":" + port)

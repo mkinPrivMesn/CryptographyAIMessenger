@@ -19,3 +19,12 @@ type RegisterRequest struct {
 	AuthHash      string `json:"auth_hash"`
 	Salt2         string `json:"salt2"`
 }
+
+type LoginSaltRequest struct {
+	Username string `json:"username"`
+}
+
+type LoginRequest struct {
+	Username string `json:"username"`
+	AuthHash string `json:"auth_hash"`
+}

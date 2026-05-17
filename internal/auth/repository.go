@@ -65,3 +65,7 @@ func (r *Repository) SaveRefreshToken(userID string, tokenHash string, expiresAt
 
 	return err
 }
+
+func (r *Repository) GetSalt2FromDB(username string) (string, error) {
+	// пишу запрос к базе данных и полуачю ответ
+}

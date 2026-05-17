@@ -19,7 +19,7 @@ func NewService(repo *Repository) *Service {
 }
 
 // проверка занятости ника
-func (s *Service) FindTheNameInDataBase(req RegisterRequest) (bool, error) {
+func (s *Service) FindTheNameInDataBase(username string) (bool, error) {
 	// making encrypted username
 	hexKey := os.Getenv("SERVER_SECRET")
 	hexIV := os.Getenv("USERNAME_IV")
@@ -34,7 +34,7 @@ func (s *Service) FindTheNameInDataBase(req RegisterRequest) (bool, error) {
 		return true, err
 	}
 
-	usernameEncrypted, err := crypto.EncryptUsername(req.Username, key, iv)
+	usernameEncrypted, err := crypto.EncryptUsername(username, key, iv)
 	if err != nil {
 		return true, err
 	}
@@ -125,4 +125,13 @@ func (s *Service) Register(req RegisterRequest) (string, string, error) {
 	}
 
 	return accessToken, refreshToken, nil
+}
+
+func (s *Service) LoginSalt(username string) (string, error) {
+	salt2, err := s.repo.GetSalt2FromDB(username)
+	if err != nil {
+		return "", err
+	}
+
+	return salt2, nil
 }
