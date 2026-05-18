@@ -67,5 +67,66 @@ func (r *Repository) SaveRefreshToken(userID string, tokenHash string, expiresAt
 }
 
 func (r *Repository) GetSalt2FromDB(username string) (string, error) {
-	// пишу запрос к базе данных и полуачю ответ
+	var salt2 string
+
+	err := r.db.QueryRow(
+		context.Background(),
+		"SELECT salt2 FROM users WHERE username_encrypted = $1",
+		username,
+	).Scan(&salt2)
+
+	if err != nil {
+		return "", err
+	}
+
+	return salt2, nil
+}
+
+func (r *Repository) GetAuthHashFromDB(username string) (string, error) {
+	var AuthHashFromDataBase string
+
+	err := r.db.QueryRow(
+		context.Background(),
+		"SELECT auth_hash FROM users WHERE username_encrypted = $1",
+		username,
+	).Scan(&AuthHashFromDataBase)
+
+	if err != nil {
+		return "", err
+	}
+
+	return AuthHashFromDataBase, nil
+}
+
+func (r *Repository) GetBlobAndSalt1FromDB(username string) (string, string, error) {
+	var Blob, Salt1 string
+
+	err := r.db.QueryRow(
+		context.Background(),
+		"SELECT encrypted_blob, salt1 FROM users WHERE username_encrypted = $1",
+		username,
+	).Scan(&Blob, &Salt1)
+
+	if err != nil {
+		return "", "", err
+	}
+
+	return Blob, Salt1, nil
+}
+
+func (r *Repository) GetUserIDAndTokenVersionFromDB(username string) (string, int, error) {
+	var UserID string
+	var TokenVersion int
+
+	err := r.db.QueryRow(
+		context.Background(),
+		"SELECT id, token_version FROM users WHERE username_encrypted = $1",
+		username,
+	).Scan(&UserID, &TokenVersion)
+
+	if err != nil {
+		return "", 0, err
+	}
+
+	return UserID, TokenVersion, nil
 }

@@ -18,6 +18,23 @@ func NewService(repo *Repository) *Service {
 	return &Service{repo: repo}
 }
 
+func (s *Service) encryptUsername(username string) (string, error) {
+	hexKey := os.Getenv("SERVER_SECRET")
+	hexIV := os.Getenv("USERNAME_IV")
+
+	key, err := hex.DecodeString(hexKey)
+	if err != nil {
+		return "", err
+	}
+
+	iv, err := hex.DecodeString(hexIV)
+	if err != nil {
+		return "", err
+	}
+
+	return crypto.EncryptUsername(username, key, iv)
+}
+
 // проверка занятости ника
 func (s *Service) FindTheNameInDataBase(username string) (bool, error) {
 	// making encrypted username
@@ -127,11 +144,57 @@ func (s *Service) Register(req RegisterRequest) (string, string, error) {
 	return accessToken, refreshToken, nil
 }
 
-func (s *Service) LoginSalt(username string) (string, error) {
-	salt2, err := s.repo.GetSalt2FromDB(username)
+func (s *Service) GetSalt2ByLogin(username string) (string, error) {
+	usernameEncrypteed, err := s.encryptUsername(username)
 	if err != nil {
 		return "", err
 	}
 
-	return salt2, nil
+	return s.repo.GetSalt2FromDB(usernameEncrypteed)
+}
+
+func (s *Service) FindAuthHashInDB(username string) (string, error) {
+	usernameEncrypteed, err := s.encryptUsername(username)
+	if err != nil {
+		return "", err
+	}
+
+	AuthHashFromDataBase, err := s.repo.GetAuthHashFromDB(usernameEncrypteed)
+	if err != nil {
+		return "", err
+	}
+
+	return AuthHashFromDataBase, nil
+}
+
+func (s *Service) FindBlobAndSalt1InDB(username string) (string, string, error) {
+	usernameEncrypteed, err := s.encryptUsername(username)
+	if err != nil {
+		return "", "", err
+	}
+
+	Blob, Salt1, err := s.repo.GetBlobAndSalt1FromDB(usernameEncrypteed)
+	if err != nil {
+		return "", "", err
+	}
+
+	return Blob, Salt1, nil
+}
+
+func (s *Service) GetUserIDAndTokenVersionInDB(username string) (string, int, error) {
+	usernameEncrypteed, err := s.encryptUsername(username)
+	if err != nil {
+		return "", 0, err
+	}
+
+	UserID, TokenVersion, err := s.repo.GetUserIDAndTokenVersionFromDB(usernameEncrypteed)
+	if err != nil {
+		return "", 0, err
+	}
+
+	return UserID, TokenVersion, nil
+}
+
+func (s *Service) SaveRefreshTokenForLogin(userID string, tokenHash string, expiresAt time.Time) error {
+	return s.repo.SaveRefreshToken(userID, tokenHash, expiresAt)
 }
