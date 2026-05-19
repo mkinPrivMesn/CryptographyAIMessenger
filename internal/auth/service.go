@@ -1,8 +1,8 @@
 package auth
 
 import (
+	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"os"
 	"time"
 
@@ -37,21 +37,7 @@ func (s *Service) encryptUsername(username string) (string, error) {
 
 // проверка занятости ника
 func (s *Service) FindTheNameInDataBase(username string) (bool, error) {
-	// making encrypted username
-	hexKey := os.Getenv("SERVER_SECRET")
-	hexIV := os.Getenv("USERNAME_IV")
-
-	key, err := hex.DecodeString(hexKey)
-	if err != nil {
-		return true, err
-	}
-
-	iv, err := hex.DecodeString(hexIV)
-	if err != nil {
-		return true, err
-	}
-
-	usernameEncrypted, err := crypto.EncryptUsername(username, key, iv)
+	usernameEncrypted, err := s.encryptUsername(username)
 	if err != nil {
 		return true, err
 	}
@@ -72,33 +58,9 @@ func (s *Service) FindTheNameInDataBase(username string) (bool, error) {
 // этот метод вызывает модуль репозитория и передает ему юзера
 func (s *Service) Register(req RegisterRequest) (string, string, error) {
 
-	// getting KEY and IV for crypto packet from .env
-	hexKey := os.Getenv("SERVER_SECRET")
-	hexIV := os.Getenv("USERNAME_IV")
-
-	key, err := hex.DecodeString(hexKey)
+	usernameEncrypted, err := s.encryptUsername(req.Username)
 	if err != nil {
 		return "", "", err
-	}
-
-	iv, err := hex.DecodeString(hexIV)
-	if err != nil {
-		return "", "", err
-	}
-
-	// encryption of username
-	usernameEncrypted, err := crypto.EncryptUsername(req.Username, key, iv)
-	if err != nil {
-		return "", "", err
-	}
-
-	// check if username already exists
-	exists, err := s.repo.FindUsername(usernameEncrypted)
-	if err != nil {
-		return "", "", err
-	}
-	if exists {
-		return "", "", errors.New("username already taken")
 	}
 
 	// creating user object
@@ -121,7 +83,7 @@ func (s *Service) Register(req RegisterRequest) (string, string, error) {
 		return "", "", err
 	}
 
-	// generating tokens
+	// then generating tokens
 	jwtSecret := os.Getenv("JWT_SECRET")
 
 	accessToken, err := crypto.GenerateAccessToken(id, user.TokenVersion, jwtSecret)
@@ -198,3 +160,24 @@ func (s *Service) GetUserIDAndTokenVersionInDB(username string) (string, int, er
 func (s *Service) SaveRefreshTokenForLogin(userID string, tokenHash string, expiresAt time.Time) error {
 	return s.repo.SaveRefreshToken(userID, tokenHash, expiresAt)
 }
+
+//		########################################
+//		#####        LogOut Methods        #####
+//		########################################
+
+func (s *Service) Logout(refreshToken string) error {
+	// захешировать шмак 256
+	hash := sha256.Sum256([]byte(refreshToken))
+	hashOfRefreshToken := hex.EncodeToString(hash[:])
+
+	err := s.repo.DeleteRefreshToken(hashOfRefreshToken)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+//		########################################
+//		#####     PassRecovery Methods     #####
+//		########################################

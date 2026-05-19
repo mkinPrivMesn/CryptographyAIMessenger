@@ -6,6 +6,7 @@ import (
 
 	"github.com/MkinPrivMesn/CryptographyAIMessenger/internal/auth"
 	"github.com/MkinPrivMesn/CryptographyAIMessenger/pkg/database"
+	"github.com/MkinPrivMesn/CryptographyAIMessenger/pkg/middleware"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -39,6 +40,12 @@ func main() {
 	r.POST("/register", authHandler.Register)
 	r.POST("/login/salt", authHandler.LoginSalt)
 	r.POST("/login", authHandler.Login)
+
+	protected := r.Group("/")
+	protected.Use(middleware.AuthRequired(authRepo))
+	{
+		protected.POST("/logout", authHandler.Logout)
+	}
 
 	// запуск сервера на порте из .env
 	r.Run(":" + port)

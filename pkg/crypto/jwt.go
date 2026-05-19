@@ -1,6 +1,7 @@
 package crypto
 
 import (
+	"errors"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -46,4 +47,24 @@ func GenerateRefreshToken() (string, string, error) {
 	tokenHash := hex.EncodeToString(hash[:])
 
 	return token, tokenHash, nil
+}
+
+func ValidateAccessToken(tokenStr, jwtSecret string) (*Claims, error) {
+	token, err := jwt.ParseWithClaims(tokenStr, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, errors.New("unexpected signing method")
+		}
+		return []byte(jwtSecret), nil
+	})
+
+	if err != nil || !token.Valid {
+		return nil, errors.New("invalid token")
+	}
+
+	claims, ok := token.Claims.(*Claims)
+	if !ok {
+		return nil, errors.New("invalid claims")
+	}
+
+	return claims, nil
 }

@@ -130,3 +130,34 @@ func (r *Repository) GetUserIDAndTokenVersionFromDB(username string) (string, in
 
 	return UserID, TokenVersion, nil
 }
+
+//		########################################
+//		#####      TokenVersion check      #####
+//		########################################
+
+func (r *Repository) GetTokenVersionInDB(UserID string) (int, error) {
+	var versionInDB int
+	err := r.db.QueryRow(
+		context.Background(),
+		"SELECT token_version FROM users WHERE id = $1",
+		UserID,
+	).Scan(&versionInDB)
+	if err != nil {
+		return 0, err
+	}
+
+	return versionInDB, nil
+}
+
+func (r *Repository) DeleteRefreshToken(hashOfRefreshToken string) error {
+	_, err := r.db.Exec(
+		context.Background(),
+		"DELETE FROM refresh_tokens WHERE token_hash = $1",
+		hashOfRefreshToken,
+	)
+	return err
+}
+
+//		########################################
+//		#####     PassRecovery Methods     #####
+//		########################################

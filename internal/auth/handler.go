@@ -20,13 +20,13 @@ func NewHandler(service *Service) *Handler {
 	return &Handler{service: service}
 }
 
-func MakeJsonParseToVar(req any, c *gin.Context) any {
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": "invalid request"})
-		return ""
+func BindJson(req any, c *gin.Context) bool {
+	if err := c.ShouldBindJSON(req); err != nil {
+		c.JSON(400, gin.H{"error": "cant parse your JSON request"})
+		return false
 	}
 
-	return req
+	return true
 }
 
 //		########################################
@@ -37,8 +37,7 @@ func (h *Handler) Register(c *gin.Context) {
 
 	// вот эта переменная создается для занесения сюда данных из JSON'a
 	var req RegisterRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, "error of ShouldBind")
+	if !BindJson(&req, c) {
 		return
 	}
 
@@ -85,8 +84,7 @@ func (h *Handler) Register(c *gin.Context) {
 func (h *Handler) LoginSalt(c *gin.Context) {
 	// вот эта переменная создается для занесения сюда данных из JSON'a
 	var req LoginSaltRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, "error of ShouldBind")
+	if !BindJson(&req, c) {
 		return
 	}
 
@@ -134,8 +132,7 @@ func (h *Handler) LoginSalt(c *gin.Context) {
 
 func (h *Handler) Login(c *gin.Context) {
 	var req LoginRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": "invalid request"})
+	if !BindJson(&req, c) {
 		return
 	}
 
@@ -166,10 +163,10 @@ func (h *Handler) Login(c *gin.Context) {
 			}
 
 			jwtSecret := os.Getenv("JWT_SECRET")
-			if err != nil {
-				c.JSON(500, gin.H{"error": "unexpected  error"})
-				return
-			}
+			// if err != nil {
+			// 	c.JSON(500, gin.H{"error": "unexpected  error"})
+			// 	return
+			// }
 
 			UserID, TokenVersion, err := h.service.GetUserIDAndTokenVersionInDB(req.Username)
 			if err != nil {
@@ -227,4 +224,25 @@ func (h *Handler) Login(c *gin.Context) {
 		}
 		c.JSON(400, gin.H{"error": "wrong username or password"})
 	}
+}
+
+//		########################################
+//		#####            Logout            #####
+//		########################################
+
+func (h *Handler) Logout(c *gin.Context) {
+	refreshToken, err := c.Cookie("refresh_token")
+	if err != nil {
+		c.JSON(500, gin.H{"error": "unexpected error"})
+		return
+	}
+
+	err = h.service.Logout(refreshToken)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "unexpected error"})
+		return
+	}
+
+	c.SetCookie("refresh_token", "", -1, "/", "", true, true)
+	c.JSON(200, gin.H{"messege": "logged out"})
 }
