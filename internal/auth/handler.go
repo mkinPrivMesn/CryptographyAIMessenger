@@ -246,3 +246,49 @@ func (h *Handler) Logout(c *gin.Context) {
 	c.SetCookie("refresh_token", "", -1, "/", "", true, true)
 	c.JSON(200, gin.H{"messege": "logged out"})
 }
+
+//		########################################
+//		#####          ChangePass          #####
+//		########################################
+
+func (h *Handler) RecoveryGetChallenge(c *gin.Context) {
+	var req LoginRequest
+	if !BindJson(&req, c) {
+		return
+	}
+
+	challengeHex, err := h.service.RecoveryGetChallenge(req)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err})
+		return
+	}
+
+	c.JSON(200, gin.H{"challenge": challengeHex})
+}
+
+func (h *Handler) Recovery(c *gin.Context) {
+	var req LoginRequest
+	if !BindJson(&req, c) {
+		return
+	}
+	// getting username from "c"
+	// encrypt it
+
+	// check this username in Database
+
+	// if exists 🡢 get id and publicKey
+	// find in DB challenge with his user_id
+	// and delete challenge from DB
+	// check for unexpired challenge
+	// signing challenge with publicKey
+	// if its true 🡢 updating rows in database: salt1/2, change blob (client sends it to me), change authHash
+	// and delete all refreshTokens and token_version++
+	// creating acces and refresh token
+	// return it to client
+	// if its not true - return to client "wrong <...>"
+
+	// if user does not exists 🡢 its fake nickname
+	// make second response to DB with username to add time
+	// sign challenge from request with FAKEE_PUBLIC from .env file
+	// return to client "wrong <...>"
+}

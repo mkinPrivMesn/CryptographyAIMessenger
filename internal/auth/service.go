@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"os"
@@ -179,5 +180,41 @@ func (s *Service) Logout(refreshToken string) error {
 }
 
 //		########################################
-//		#####     PassRecovery Methods     #####
+//		#####      ChangePass Methods      #####
 //		########################################
+
+func (s *Service) RecoveryGetChallenge(req LoginRequest) (string, error) {
+	username_encrypted, err := s.encryptUsername(req.Username)
+	if err != nil {
+		return "", err
+	}
+
+	exists, err := s.repo.FindUsername(username_encrypted)
+	if err != nil {
+		return "", err
+	}
+
+	challenge := make([]byte, 32)
+	_, err = rand.Read(challenge)
+	if err != nil {
+		return "", err
+	}
+	challengeHex := hex.EncodeToString(challenge)
+
+	if exists {
+		user_id, err := s.repo.GetIDByUsername(username_encrypted)
+		if err != nil {
+			return "", err
+		}
+
+		err1 := s.repo.AddChallengeToDB(challengeHex, user_id, time.Now().Add(5*time.Minute))
+		if err1 != nil {
+			return "", err1
+		}
+
+	} else {
+		s.repo.GetIDByUsername(username_encrypted) // намеренно игнорируем ошибку
+	}
+
+	return challengeHex, nil
+}

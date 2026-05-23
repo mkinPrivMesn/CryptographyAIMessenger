@@ -159,5 +159,25 @@ func (r *Repository) DeleteRefreshToken(hashOfRefreshToken string) error {
 }
 
 //		########################################
-//		#####     PassRecovery Methods     #####
+//		#####      ChangePass Methods      #####
 //		########################################
+
+func (r *Repository) GetIDByUsername(username string) (string, error) {
+	var userId string
+
+	err := r.db.QueryRow(
+		context.Background(),
+		"SELECT id FROM users WHERE username_encrypted = $1",
+		username,
+	).Scan(&userId)
+	return userId, err
+}
+
+func (r *Repository) AddChallengeToDB(challengeHex, userId string, expiresAt time.Time) error {
+	_, err := r.db.Exec(
+		context.Background(),
+		"INSERT INTO challenges (expires_at, user_id, challenge) VALUES ($1, $2, $3)",
+		expiresAt, userId, challengeHex,
+	)
+	return err
+}

@@ -40,6 +40,8 @@ func main() {
 	r.POST("/register", authHandler.Register)
 	r.POST("/login/salt", authHandler.LoginSalt)
 	r.POST("/login", authHandler.Login)
+	r.POST("/recovery/GetChallenge", authHandler.RecoveryGetChallenge)
+	r.POST("/recovery", authHandler.Recovery)
 
 	protected := r.Group("/")
 	protected.Use(middleware.AuthRequired(authRepo))
