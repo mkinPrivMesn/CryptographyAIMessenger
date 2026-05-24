@@ -181,3 +181,75 @@ func (r *Repository) AddChallengeToDB(challengeHex, userId string, expiresAt tim
 	)
 	return err
 }
+
+func (r *Repository) GetUserIdPubKeyInDB(username_encrypted string) (string, string, error) {
+	var userId, pubKey string
+
+	err := r.db.QueryRow(
+		context.Background(),
+		"SELECT id, public_key FROM users WHERE username_encrypted = $1",
+		username_encrypted,
+	).Scan(&userId, &pubKey)
+	return userId, pubKey, err
+}
+
+func (r *Repository) FindChallengeInDB(userId string) ([]ChallengeRow, error) {
+	rows, err := r.db.Query(
+		context.Background(),
+		"SELECT challenge, expires_at FROM challenges WHERE user_id = $1",
+		userId,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []ChallengeRow // its slice that contains all challenges
+	for rows.Next() {
+		var row ChallengeRow
+		if err := rows.Scan(&row.Challenge, &row.ExpiresAt); err != nil {
+			return nil, err
+		}
+		result = append(result, row)
+	}
+
+	return result, nil
+}
+
+func (r *Repository) DeleteChallenge(challenge string) error {
+	_, err := r.db.Exec(
+		context.Background(),
+		"DELETE FROM challenges WHERE challenge = $1",
+		challenge,
+	)
+	return err
+}
+
+func (r *Repository) UpdateColumsForRecoveryInDB(user_id, salt1, salt2, encryptedBlob, authHash string) error {
+	_, err := r.db.Exec(
+		context.Background(),
+		"UPDATE users SET salt1 = $1, salt2 = $2, encrypted_blob = $3, auth_hash = $4 WHERE id = $5",
+		salt1, salt2, encryptedBlob, authHash, user_id,
+	)
+	return err
+}
+
+func (r *Repository) DeleteAllRefreshTokensInDB(user_id string) error {
+	_, err := r.db.Exec(
+		context.Background(),
+		"DELETE FROM refresh_tokens WHERE user_id = $1",
+		user_id,
+	)
+	return err
+}
+
+func (r *Repository) InnncrementTokenVersion(user_id string) (int, error) {
+	var newVersion int
+
+	err := r.db.QueryRow(
+		context.Background(),
+		"UPDATE users SET token_version = token_version + 1 WHERE id = $1 RETURNING token_version",
+		user_id,
+	).Scan(&newVersion)
+	return newVersion, err
+}

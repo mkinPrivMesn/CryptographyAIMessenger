@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -183,7 +184,7 @@ func (s *Service) Logout(refreshToken string) error {
 //		#####      ChangePass Methods      #####
 //		########################################
 
-func (s *Service) RecoveryGetChallenge(req LoginRequest) (string, error) {
+func (s *Service) RecoveryGetChallenge(req RecoveryRequest) (string, error) {
 	username_encrypted, err := s.encryptUsername(req.Username)
 	if err != nil {
 		return "", err
@@ -217,4 +218,97 @@ func (s *Service) RecoveryGetChallenge(req LoginRequest) (string, error) {
 	}
 
 	return challengeHex, nil
+}
+
+func (s *Service) RecoveryGetIdAndPubKey(username string, signature string) (string, string, error) {
+	username_encrypted, err := s.encryptUsername(username)
+	if err != nil {
+		return "", "", err
+	}
+
+	exists, err := s.repo.FindUsername(username_encrypted)
+	if err != nil {
+		return "", "", err
+	}
+
+	if exists {
+		user_id, pubKey, err := s.repo.GetUserIdPubKeyInDB(username_encrypted)
+		if err != nil {
+			return "", "", err
+		}
+
+		return user_id, pubKey, nil
+	} else {
+		fakePublic := os.Getenv("FAKE_PUBLIC")
+		fakePublicBytes, err := hex.DecodeString(fakePublic)
+		if err != nil {
+			return "", "", err
+		}
+
+		fakeChallenge := make([]byte, 32)
+		rand.Read(fakeChallenge)
+
+		signatureBytes, err := hex.DecodeString(signature)
+		if err != nil {
+			return "", "", err
+		}
+
+		ed25519.Verify(fakePublicBytes, fakeChallenge, signatureBytes)
+
+		s.repo.FindUsername(username_encrypted) // специальный холостой запрос для ттотго, чтобы потянуть время для timinng attack
+		return "", "", ErrFakeUser
+	}
+}
+
+func (s *Service) IsChallengeLegit(userId string, pubKey string, req RecoveryRequest) (bool, error) {
+	challenges, err := s.repo.FindChallengeInDB(userId) // вот тут говнецо прячется
+	if err != nil {
+		return false, err
+	}
+
+	for _, c := range challenges {
+		if c.ExpiresAt.Before(time.Now()) {
+			s.repo.DeleteChallenge(c.Challenge)
+			continue
+		}
+
+		pubKeyBytes, err := hex.DecodeString(pubKey)
+		if err != nil {
+			return false, err
+		}
+		signatureBytes, err := hex.DecodeString(req.Signature)
+		if err != nil {
+			return false, err
+		}
+		challengeBytes, err := hex.DecodeString(c.Challenge)
+		if err != nil {
+			return false, err
+		}
+
+		valid := ed25519.Verify(pubKeyBytes, challengeBytes, signatureBytes)
+		s.repo.DeleteChallenge(c.Challenge) // удаляем в любом случае
+		if valid {
+			return true, nil
+		}
+	}
+
+	return false, nil
+
+}
+
+func (s *Service) UpdateColumsForRecovery(user_id, salt1, salt2, encryptedBlob, authHash string) error {
+	return s.repo.UpdateColumsForRecoveryInDB(user_id, salt1, salt2, encryptedBlob, authHash)
+}
+
+func (s *Service) DeleteAllRefreshTokens(user_id string) error {
+	return s.repo.DeleteAllRefreshTokensInDB(user_id)
+}
+
+func (s *Service) IncrementTokenVersionAndReturnIt(user_id string) (int, error) {
+	tokenVersion, err := s.repo.InnncrementTokenVersion(user_id)
+	if err != nil {
+		return 0, err
+	}
+
+	return tokenVersion, nil
 }

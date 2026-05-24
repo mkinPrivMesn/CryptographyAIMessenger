@@ -4,6 +4,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"log"
 	"os"
 	"time"
@@ -163,10 +164,6 @@ func (h *Handler) Login(c *gin.Context) {
 			}
 
 			jwtSecret := os.Getenv("JWT_SECRET")
-			// if err != nil {
-			// 	c.JSON(500, gin.H{"error": "unexpected  error"})
-			// 	return
-			// }
 
 			UserID, TokenVersion, err := h.service.GetUserIDAndTokenVersionInDB(req.Username)
 			if err != nil {
@@ -252,14 +249,14 @@ func (h *Handler) Logout(c *gin.Context) {
 //		########################################
 
 func (h *Handler) RecoveryGetChallenge(c *gin.Context) {
-	var req LoginRequest
+	var req RecoveryRequest
 	if !BindJson(&req, c) {
 		return
 	}
 
 	challengeHex, err := h.service.RecoveryGetChallenge(req)
 	if err != nil {
-		c.JSON(500, gin.H{"error": err})
+		c.JSON(500, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -267,28 +264,81 @@ func (h *Handler) RecoveryGetChallenge(c *gin.Context) {
 }
 
 func (h *Handler) Recovery(c *gin.Context) {
-	var req LoginRequest
+	var req RecoveryRequest
 	if !BindJson(&req, c) {
 		return
 	}
-	// getting username from "c"
-	// encrypt it
 
-	// check this username in Database
+	user_id, pubKey, err := h.service.RecoveryGetIdAndPubKey(req.Username, req.Signature)
+	if errors.Is(err, ErrFakeUser) {
+		c.JSON(400, gin.H{"error": "wrong or expired"})
+		return
+	} else if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
 
-	// if exists 🡢 get id and publicKey
-	// find in DB challenge with his user_id
-	// and delete challenge from DB
-	// check for unexpired challenge
-	// signing challenge with publicKey
-	// if its true 🡢 updating rows in database: salt1/2, change blob (client sends it to me), change authHash
-	// and delete all refreshTokens and token_version++
-	// creating acces and refresh token
-	// return it to client
-	// if its not true - return to client "wrong <...>"
+	legit, err := h.service.IsChallengeLegit(user_id, pubKey, req)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
 
-	// if user does not exists 🡢 its fake nickname
-	// make second response to DB with username to add time
-	// sign challenge from request with FAKEE_PUBLIC from .env file
-	// return to client "wrong <...>"
+	if legit {
+		err := h.service.UpdateColumsForRecovery(user_id, req.Salt1, req.Salt2, req.EncryptedBlob, req.AuthHash)
+		if err != nil {
+			c.JSON(500, gin.H{"error": err.Error()})
+			return
+		}
+
+		err2 := h.service.DeleteAllRefreshTokens(user_id)
+		if err2 != nil {
+			c.JSON(500, gin.H{"error": err2.Error()})
+			return
+		}
+
+		newTokenVersion, err3 := h.service.IncrementTokenVersionAndReturnIt(user_id)
+		if err3 != nil {
+			c.JSON(500, gin.H{"error": err3.Error()})
+			return
+		}
+
+		serverSecret := os.Getenv("JWT_SECRET")
+
+		newAccessToken, err4 := crypto.GenerateAccessToken(user_id, newTokenVersion, serverSecret)
+		if err4 != nil {
+			c.JSON(500, gin.H{"error": err4.Error()})
+			return
+		}
+		newRefreshToken, tokenHash, err5 := crypto.GenerateRefreshToken()
+		if err5 != nil {
+			c.JSON(500, gin.H{"error": err5.Error()})
+			return
+		}
+		expiresAt := time.Now().Add(30 * 24 * time.Hour)
+
+		err6 := h.service.SaveRefreshTokenForLogin(user_id, tokenHash, expiresAt)
+		if err6 != nil {
+			c.JSON(500, gin.H{"error": err6.Error()})
+			return
+		}
+
+		c.SetCookie(
+			"refresh_token",
+			newRefreshToken,
+			60*60*24*30, // 30 дней в секундах
+			"/",
+			"",
+			true, // Secure
+			true, // HttpOnly
+		)
+
+		c.JSON(200, gin.H{
+			"access_token": newAccessToken,
+		})
+		return
+	} else {
+		c.JSON(400, gin.H{"error": "wrong or expired"})
+		return
+	}
 }
