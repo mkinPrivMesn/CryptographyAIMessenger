@@ -214,6 +214,7 @@ func (s *Service) RecoveryGetChallenge(req RecoveryRequest) (string, error) {
 		}
 
 	} else {
+		time.Sleep(250 * time.Microsecond)
 		s.repo.GetIDByUsername(username_encrypted) // намеренно игнорируем ошибку
 	}
 
