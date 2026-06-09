@@ -2,13 +2,17 @@ package auth
 
 import (
 	"crypto/ed25519"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/MkinPrivMesn/CryptographyAIMessenger/pkg/crypto"
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
 
@@ -77,6 +81,7 @@ func (s *Service) Register(req RegisterRequest) (string, string, error) {
 		AuthHash:          req.AuthHash,
 		Salt2:             req.Salt2,
 		TokenVersion:      1,
+		NickName:          req.NickName,
 	}
 
 	// save user to DB first
@@ -101,6 +106,11 @@ func (s *Service) Register(req RegisterRequest) (string, string, error) {
 	// save refresh token
 	expiresAt := time.Now().Add(30 * 24 * time.Hour)
 	err = s.repo.SaveRefreshToken(user.RandomUUID, refreshTokenHash, expiresAt)
+	if err != nil {
+		return "", "", err
+	}
+
+	err = s.repo.DeleteInviteCode(req.InviteCode)
 	if err != nil {
 		return "", "", err
 	}
@@ -312,4 +322,53 @@ func (s *Service) IncrementTokenVersionAndReturnIt(user_id string) (int, error) 
 	}
 
 	return tokenVersion, nil
+}
+
+//		########################################
+//		#####          CreateInvite        #####
+//		########################################
+
+func (s *Service) CheckHmacFromRequest(c *gin.Context) error {
+	serverSecret := os.Getenv("SERVER_SECRET")
+
+	ts := c.GetHeader("X-Timestamp")
+	sig := c.GetHeader("X-Signature")
+
+	timestamp, err := strconv.ParseInt(ts, 10, 64)
+	if err != nil {
+		return errors.New("invalid timestamp")
+	}
+
+	if time.Now().Unix()-timestamp > 30 {
+		return errors.New("timestamp expired")
+	}
+
+	mac := hmac.New(sha256.New, []byte(serverSecret))
+	mac.Write([]byte(ts))
+	expected := hex.EncodeToString(mac.Sum(nil))
+
+	if !hmac.Equal([]byte(expected), []byte(sig)) {
+		return errors.New("invalid signature")
+	}
+
+	return nil
+}
+
+func (s *Service) GetNewInvite() (string, error) {
+	return s.repo.GetNewInvite()
+}
+
+func (s *Service) CheckThatInviteCodeIsExists(req RegisterRequest) error {
+	exists, expires_at, err := s.repo.CheckThatInviteCodeIsExists(req.InviteCode)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return errors.New("invite code doesnt exists")
+	}
+	if expires_at.Before(time.Now()) {
+		return errors.New("your invite code is expired (5 mins)")
+	}
+
+	return nil
 }

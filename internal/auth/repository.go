@@ -2,9 +2,11 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -20,8 +22,8 @@ func (r *Repository) CreateUser(user User) error {
 	_, err := r.db.Exec(
 		context.Background(),
 		`INSERT INTO users 
-    (id, username_encrypted, public_key, encrypted_blob, salt1, auth_hash, salt2, token_version) 
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    (id, username_encrypted, public_key, encrypted_blob, salt1, auth_hash, salt2, token_version, nickname) 
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
 		user.RandomUUID,
 		user.UsernameEncrypted,
 		user.PublicKey,
@@ -30,6 +32,7 @@ func (r *Repository) CreateUser(user User) error {
 		user.AuthHash,
 		user.Salt2,
 		user.TokenVersion,
+		user.NickName,
 	)
 
 	return err
@@ -252,4 +255,47 @@ func (r *Repository) InnncrementTokenVersion(user_id string) (int, error) {
 		user_id,
 	).Scan(&newVersion)
 	return newVersion, err
+}
+
+//		########################################
+//		#####          CreateInvite        #####
+//		########################################
+
+func (r *Repository) GetNewInvite() (string, error) {
+	var code string
+
+	err := r.db.QueryRow(
+		context.Background(),
+		`INSERT INTO invite_codes DEFAULT VALUES
+		RETURNING code`,
+	).Scan(&code)
+	return code, err
+}
+
+func (r *Repository) CheckThatInviteCodeIsExists(code string) (bool, time.Time, error) {
+	var expiresAt time.Time
+
+	err := r.db.QueryRow(
+		context.Background(),
+		"SELECT expires_at FROM invite_codes WHERE code = $1",
+		code,
+	).Scan(&expiresAt)
+
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, time.Time{}, nil // код не найден — не ошибка
+		}
+		return false, time.Time{}, err
+	}
+
+	return true, expiresAt, nil
+}
+
+func (r *Repository) DeleteInviteCode(code string) error {
+	_, err := r.db.Exec(
+		context.Background(),
+		"DELETE FROM invite_codes WHERE code = $1",
+		code,
+	)
+	return err
 }

@@ -14,6 +14,7 @@ type User struct {
 	AuthHash          string
 	Salt2             string
 	TokenVersion      int
+	NickName          string
 }
 
 type RegisterRequest struct {
@@ -23,15 +24,19 @@ type RegisterRequest struct {
 	Salt1         string `json:"salt1"`
 	AuthHash      string `json:"auth_hash"`
 	Salt2         string `json:"salt2"`
+	NickName      string `json:"nickname"`
+	InviteCode    string `json:"invite_code"`
 }
 
 type LoginSaltRequest struct {
 	Username string `json:"username"`
+	NickName string `json:"nickname"`
 }
 
 type LoginRequest struct {
 	Username string `json:"username"`
 	AuthHash string `json:"auth_hash"`
+	NickName string `json:"nickname"`
 }
 
 type RecoveryRequest struct {
@@ -42,6 +47,7 @@ type RecoveryRequest struct {
 	Salt1         string `json:"salt1"`
 	AuthHash      string `json:"auth_hash"`
 	Salt2         string `json:"salt2"`
+	NickName      string `json:"nickname"`
 }
 
 type ChallengeRow struct {

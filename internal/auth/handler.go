@@ -42,6 +42,13 @@ func (h *Handler) Register(c *gin.Context) {
 		return
 	}
 
+	// проверяем что инвайт код легитный
+	err := h.service.CheckThatInviteCodeIsExists(req)
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+
 	// вот тут проверка на занятость ника
 	nickExists, err := h.service.FindTheNameInDataBase(req.Username)
 	if err != nil {
@@ -59,7 +66,7 @@ func (h *Handler) Register(c *gin.Context) {
 	accessToken, reefreshToken, err2 := h.service.Register(req)
 
 	if err2 != nil {
-		c.JSON(500, gin.H{"error": err2})
+		c.JSON(500, gin.H{"error": err2.Error()})
 		return
 	}
 
@@ -97,7 +104,6 @@ func (h *Handler) LoginSalt(c *gin.Context) {
 	}
 
 	// return response to  clietn
-	// ##### i should add code for timeSafeEequal for hash generation and getting hash from DB
 	if nickNameExists {
 		// get Salt #2 from database
 		salt2, err := h.service.GetSalt2ByLogin(req.Username)
@@ -341,4 +347,24 @@ func (h *Handler) Recovery(c *gin.Context) {
 		c.JSON(400, gin.H{"error": "wrong or expired"})
 		return
 	}
+}
+
+//		########################################
+//		#####          CreateInvite        #####
+//		########################################
+
+func (h *Handler) CreateInvite(c *gin.Context) {
+	err := h.service.CheckHmacFromRequest(c)
+	if err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	code, err := h.service.GetNewInvite()
+	if err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"invite_code": code})
 }
